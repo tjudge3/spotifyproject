@@ -10,30 +10,40 @@ const LoginScreen = () => {
   const navigation = useNavigation();
 
   useEffect(() => {
-    // Constantly checks to see if the token is valid or expired, logout if expired.
+    // Check if the token is valid or expired on component mount
     const checkTokenValidity = async () => {
-      // Gets the values from AsyncStorage & prints them to console
-      const accessToken = await AsyncStorage.getItem('token');
-      const expirationDate = await AsyncStorage.getItem('expirationDate');
-      console.log('Access token: ', accessToken);
-      console.log('Expiration Date: ', expirationDate);
+      try {
+        const accessToken = await AsyncStorage.getItem('token');
+        const expirationDate = await AsyncStorage.getItem('expirationDate');
+        console.log('Access token:', accessToken);
+        console.log('Expiration Date:', expirationDate);
 
-      if (accessToken && expirationDate) {
-        const currentTime = Date.now();
-        if (currentTime < parseInt(expirationDate)) {
-          // Token is still valid
-          navigation.replace('Main');
+        if (accessToken && expirationDate) {
+          const currentTime = Date.now();
+          console.log('Current time:', currentTime);
+          console.log('Expiration time:', parseInt(expirationDate));
+
+          if (currentTime < parseInt(expirationDate)) {
+            console.log('Token is valid, navigating to Main...');
+            navigation.replace('Main');
+          } else {
+            console.log('Token is expired, clearing AsyncStorage...');
+            await AsyncStorage.removeItem('token');
+            await AsyncStorage.removeItem('expirationDate');
+          }
         } else {
-          // Token is expired
-          await AsyncStorage.removeItem('token');
-          await AsyncStorage.removeItem('expirationDate');
+          console.log('No token or expiration date found in AsyncStorage.');
         }
+      } catch (error) {
+        console.error('Error checking token validity:', error.message);
       }
     };
+
     checkTokenValidity();
   }, []);
 
   async function authenticate() {
+    console.log('Authenticate function triggered'); // Debugging log
     try {
       const config = {
         issuer: 'https://accounts.spotify.com',
@@ -51,18 +61,21 @@ const LoginScreen = () => {
         ],
         redirectUrl: 'myapp://spotify-auth-callback',
       };
-      const result = await AppAuth.authAsync(config);
-      console.log('Auth result:', result);
+      console.log('Authentication config:', config);
 
-      // After Authing store token, expiration date, and navigate to main.
+      const result = await AppAuth.authAsync(config);
+      console.log('Authentication result:', result);
+
       if (result.accessToken) {
+        console.log('Access token retrieved:', result.accessToken);
         const expirationDate = new Date(result.accessTokenExpirationDate).getTime();
         await AsyncStorage.setItem('token', result.accessToken);
         await AsyncStorage.setItem('expirationDate', expirationDate.toString());
+        console.log('Token and expiration date saved in AsyncStorage');
         navigation.navigate('Main');
       }
     } catch (error) {
-      console.error('Authentication failed', error);
+      console.error('Authentication failed:', error.message, error.stack);
     }
   }
 
@@ -87,10 +100,12 @@ const LoginScreen = () => {
         >
           TuneTags
         </Text>
-
         <View style={{ height: 80 }} />
         <Pressable
-          onPress={authenticate}
+          onPress={() => {
+            console.log('Button Pressed'); // Debugging log
+            authenticate();
+          }}
           style={{
             backgroundColor: '#1DB954',
             padding: 10,
@@ -102,7 +117,7 @@ const LoginScreen = () => {
             justifyContent: 'center',
           }}
         >
-          <Text>Sign in with Spotify</Text>
+          <Text style={{ color: 'white' }}>Sign in with Spotify</Text>
         </Pressable>
       </SafeAreaView>
     </LinearGradient>
