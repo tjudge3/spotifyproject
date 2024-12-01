@@ -1,65 +1,18 @@
-import * as WebBrowser from 'expo-web-browser';
-import { makeRedirectUri, useAuthRequest } from 'expo-auth-session';
 import { StyleSheet, Text, View, SafeAreaView, Pressable } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect } from 'react';
 import Entypo from '@expo/vector-icons/Entypo';
+import * as AppAuth from 'expo-app-auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
-
-WebBrowser.maybeCompleteAuthSession();
-
-// Spotify Authorization Discovery Endpoints
-const discovery = {
-  authorizationEndpoint: 'https://accounts.spotify.com/authorize',
-  tokenEndpoint: 'https://accounts.spotify.com/api/token',
-};
 
 const LoginScreen = () => {
   const navigation = useNavigation();
 
-  const [request, response, promptAsync] = useAuthRequest(
-    {
-      clientId: '76543b3610be4b76ae54eb5a60571607',
-      scopes: [
-        'user-read-email',
-        'user-library-read',
-        'user-read-recently-played',
-        'user-top-read',
-        'user-read-playback-position',
-        'user-read-currently-playing',
-        'playlist-read-private',
-        'playlist-read-collaborative',
-        'playlist-modify-public',
-      ],
-      redirectUri: makeRedirectUri({
-        scheme: 'myapp',
-      }),
-    },
-    discovery
-  );
-
   useEffect(() => {
-    // Handle response from Spotify
-    const handleResponse = async () => {
-      if (response?.type === 'success') {
-        const { access_token, expires_in } = response.params;
-
-        // Save token and expiration date to AsyncStorage
-        const expirationDate = Date.now() + expires_in * 1000;
-        await AsyncStorage.setItem('token', access_token);
-        await AsyncStorage.setItem('expirationDate', expirationDate.toString());
-
-        // Navigate to the main screen
-        navigation.navigate('Main');
-      }
-    };
-    handleResponse();
-  }, [response]);
-
-  useEffect(() => {
-    // Check token validity on mount
+    // Constantly checks to see if the token is valid or expired, logout if expired.
     const checkTokenValidity = async () => {
+      // Gets the values from AsyncStorage & prints them to console
       const accessToken = await AsyncStorage.getItem('token');
       const expirationDate = await AsyncStorage.getItem('expirationDate');
       console.log('Access token: ', accessToken);
@@ -68,10 +21,10 @@ const LoginScreen = () => {
       if (accessToken && expirationDate) {
         const currentTime = Date.now();
         if (currentTime < parseInt(expirationDate)) {
-          // Token is valid
+          // Token is still valid
           navigation.replace('Main');
         } else {
-          // Token expired
+          // Token is expired
           await AsyncStorage.removeItem('token');
           await AsyncStorage.removeItem('expirationDate');
         }
@@ -79,6 +32,39 @@ const LoginScreen = () => {
     };
     checkTokenValidity();
   }, []);
+
+  async function authenticate() {
+    try {
+      const config = {
+        issuer: 'https://accounts.spotify.com',
+        clientId: '76543b3610be4b76ae54eb5a60571607',
+        scopes: [
+          'user-read-email',
+          'user-library-read',
+          'user-read-recently-played',
+          'user-top-read',
+          'user-read-playback-position',
+          'user-read-currently-playing',
+          'playlist-read-private',
+          'playlist-read-collaborative',
+          'playlist-modify-public', // or 'playlist-modify-private'
+        ],
+        redirectUrl: 'myapp://spotify-auth-callback',
+      };
+      const result = await AppAuth.authAsync(config);
+      console.log('Auth result:', result);
+
+      // After Authing store token, expiration date, and navigate to main.
+      if (result.accessToken) {
+        const expirationDate = new Date(result.accessTokenExpirationDate).getTime();
+        await AsyncStorage.setItem('token', result.accessToken);
+        await AsyncStorage.setItem('expirationDate', expirationDate.toString());
+        navigation.navigate('Main');
+      }
+    } catch (error) {
+      console.error('Authentication failed', error);
+    }
+  }
 
   return (
     <LinearGradient colors={['#231640', '#2c1b50']} style={{ flex: 1 }}>
@@ -104,9 +90,7 @@ const LoginScreen = () => {
 
         <View style={{ height: 80 }} />
         <Pressable
-          onPress={() => {
-            promptAsync();
-          }}
+          onPress={authenticate}
           style={{
             backgroundColor: '#1DB954',
             padding: 10,
@@ -117,9 +101,8 @@ const LoginScreen = () => {
             alignItems: 'center',
             justifyContent: 'center',
           }}
-          disabled={!request}
         >
-          <Text style={{ color: 'white', fontWeight: 'bold' }}>Sign in with Spotify</Text>
+          <Text>Sign in with Spotify</Text>
         </Pressable>
       </SafeAreaView>
     </LinearGradient>
